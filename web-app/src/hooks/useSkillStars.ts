@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
 
 const STORAGE_KEY = 'user_stars';
 
@@ -42,14 +41,14 @@ function saveUserStarsToStorage(stars: UserStars): void {
 
 /**
  * Hook to manage skill starring functionality
- * Handles localStorage persistence, optimistic UI updates, and Supabase sync
+ * Handles localStorage persistence, optimistic UI updates, and Worker API sync
  */
 export function useSkillStars(skillId: string | undefined): UseSkillStarsReturn {
   const [starCount, setStarCount] = useState<number>(0);
   const [hasStarred, setHasStarred] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Initialize star count from Supabase and check if user has starred
+  // Initialize star count from API and check if user has starred
   useEffect(() => {
     if (!skillId) return;
 
@@ -58,21 +57,16 @@ export function useSkillStars(skillId: string | undefined): UseSkillStarsReturn 
       const userStars = getUserStarsFromStorage();
       setHasStarred(!!userStars[skillId]);
 
-      // Fetch star count from Supabase if available
-      if (supabase) {
-        try {
-          const { data, error } = await supabase
-            .from('skill_stars')
-            .select('star_count')
-            .eq('skill_id', skillId)
-            .single();
+      // Fetch star count from API
+      try {
+        const response = await fetch(`/api/stars/${encodeURIComponent(skillId)}`);
 
-          if (!error && data) {
-            setStarCount(data.star_count);
-          }
-        } catch (err) {
-          console.warn('Failed to fetch star count:', err);
+        if (response.ok) {
+          const data: { skillId: string; starCount: number } = await response.json();
+          setStarCount(data.starCount || 0);
         }
+      } catch (err) {
+        console.warn('Failed to fetch star count:', err);
       }
     };
 
@@ -81,7 +75,7 @@ export function useSkillStars(skillId: string | undefined): UseSkillStarsReturn 
 
   /**
    * Handle star button click
-   * Prevents double-starring, updates optimistically, syncs to Supabase
+   * Prevents double-starring, updates optimistically, syncs to Worker API
    */
   const handleStarClick = useCallback(async () => {
     if (!skillId || isLoading) return;
@@ -101,40 +95,22 @@ export function useSkillStars(skillId: string | undefined): UseSkillStarsReturn 
       const updatedStars = { ...userStars, [skillId]: true };
       saveUserStarsToStorage(updatedStars);
 
-      // Sync to Supabase if available
-      if (supabase) {
-        const { data: existingData, error: fetchError } = await supabase
-          .from('skill_stars')
-          .select('star_count')
-          .eq('skill_id', skillId)
-          .single();
+      // Sync to Worker API
+      const response = await fetch(`/api/stars/${encodeURIComponent(skillId)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-        if (fetchError && fetchError.code !== 'PGRST116') {
-          // PGRST116 = not found, which is expected for new skills
-          console.warn('Failed to fetch existing star count:', fetchError);
-        }
-
-        if (existingData) {
-          // Update existing record
-          const { error: updateError } = await supabase
-            .from('skill_stars')
-            .update({ star_count: existingData.star_count + 1 })
-            .eq('skill_id', skillId);
-
-          if (updateError) {
-            console.warn('Failed to update star count:', updateError);
-          }
-        } else {
-          // Insert new record
-          const { error: insertError } = await supabase
-            .from('skill_stars')
-            .insert({ skill_id: skillId, star_count: 1 });
-
-          if (insertError) {
-            console.warn('Failed to insert star count:', insertError);
-          }
-        }
+      if (!response.ok) {
+        throw new Error(`Failed to increment star count: ${response.status}`);
       }
+
+      const data: { skillId: string; starCount: number } = await response.json();
+
+      // Update with actual count from server
+      setStarCount(data.starCount);
     } catch (error) {
       // Rollback optimistic update on error
       console.error('Failed to star skill:', error);
