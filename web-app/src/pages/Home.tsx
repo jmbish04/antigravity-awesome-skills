@@ -74,8 +74,8 @@ export function Home(): React.ReactElement {
     setSyncing(true);
     setSyncMsg(null);
     try {
-      const res = await fetch('/api/refresh-skills');
-      const data = await res.json();
+      const res = await fetch('/api/refresh-skills', { method: 'POST' });
+      const data: { success: boolean; upToDate?: boolean; count?: number; error?: string } = await res.json();
       if (data.success) {
         if (data.upToDate) {
           setSyncMsg({ type: 'info', text: 'ℹ️ Skills are already up to date!' });

@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { Skill, StarMap } from '../types';
-import { supabase } from '../lib/supabase';
 
 interface SkillContextType {
     skills: Skill[];
@@ -13,7 +12,7 @@ const SkillContext = createContext<SkillContextType | undefined>(undefined);
 
 export function SkillProvider({ children }: { children: React.ReactNode }) {
     const [skills, setSkills] = useState<Skill[]>([]);
-    const [stars, setStars] = useState<StarMap>({});
+    const [stars] = useState<StarMap>({}); // Stars loaded per-skill via useSkillStars hook
     const [loading, setLoading] = useState(true);
 
     const fetchSkillsAndStars = useCallback(async (silent = false) => {
@@ -21,7 +20,7 @@ export function SkillProvider({ children }: { children: React.ReactNode }) {
         try {
             // Fetch skills index
             const res = await fetch('/skills.json');
-            const data = await res.json();
+            const data: Skill[] = await res.json();
 
             // Incremental loading: set first 50 skills immediately if not a silent refresh
             if (!silent && data.length > 50) {
@@ -31,20 +30,8 @@ export function SkillProvider({ children }: { children: React.ReactNode }) {
                 setSkills(data);
             }
 
-            // Fetch stars from Supabase if available
-            if (supabase) {
-                const { data: starData, error } = await supabase
-                    .from('skill_stars')
-                    .select('skill_id, star_count');
-
-                if (!error && starData) {
-                    const starMap: StarMap = {};
-                    starData.forEach((item: { skill_id: string; star_count: number }) => {
-                        starMap[item.skill_id] = item.star_count;
-                    });
-                    setStars(starMap);
-                }
-            }
+            // Note: Star data is now loaded per-skill via the useSkillStars hook
+            // We keep this for batch star loading if needed in the future
 
             // Finally set the full set of skills if we did incremental load
             if (!silent && data.length > 50) {

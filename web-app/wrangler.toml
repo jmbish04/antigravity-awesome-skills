@@ -1,0 +1,23 @@
+name = "antigravity-skills"
+main = "src/worker.ts"
+compatibility_date = "2026-03-06"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+
+[[kv_namespaces]]
+binding = "SKILLS_CACHE"
+id = "placeholder-kv-namespace-id"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "skills-db"
+database_id = "placeholder-d1-id"
+migrations_dir = "./drizzle/migrations"
+
+# Uncomment if vector search is implemented
+# [[vectorize]]
+# binding = "VECTOR_INDEX"
+# index_name = "skills-index"
